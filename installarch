@@ -1,0 +1,82 @@
+#!/bin/bash
+
+# Set variables
+HOSTNAME="archlinux"
+USERNAME="yourusername"
+PASSWORD="yourpassword"
+
+# Update the system clock
+timedatectl set-ntp true
+
+# Partition the disks (Assuming /dev/sda, adjust as needed)
+# This example will create a simple partition layout:
+# /dev/sda1 -> EFI System Partition
+# /dev/sda2 -> Linux filesystem
+parted /dev/sda --script mklabel gpt
+parted /dev/sda --script mkpart primary fat32 1MiB 551MiB
+parted /dev/sda --script set 1 esp on
+parted /dev/sda --script mkpart primary ext4 551MiB 100%
+
+# Format the partitions
+mkfs.fat -F32 /dev/sda1
+mkfs.ext4 /dev/sda2
+
+# Mount the file systems
+mount /dev/sda2 /mnt
+mkdir /mnt/boot
+mount /dev/sda1 /mnt/boot
+
+# Install essential packages
+pacstrap /mnt base linux linux-firmware
+
+# Generate an fstab file
+genfstab -U /mnt >> /mnt/etc/fstab
+
+# Change root into the new system
+arch-chroot /mnt /bin/bash <<EOF
+
+# Set the time zone to United Kingdom
+ln -sf /usr/share/zoneinfo/Europe/London /etc/localtime
+hwclock --systohc
+
+# Uncomment en_GB.UTF-8 UTF-8 in /etc/locale.gen and generate locales
+sed -i 's/#en_GB.UTF-8 UTF-8/en_GB.UTF-8 UTF-8/' /etc/locale.gen
+locale-gen
+
+# Create the locale.conf file
+echo "LANG=en_GB.UTF-8" > /etc/locale.conf
+
+# Set the console keyboard layout to UK
+echo "KEYMAP=uk" > /etc/vconsole.conf
+
+# Set the hostname
+echo $HOSTNAME > /etc/hostname
+
+# Configure the hosts file
+cat <<EOL > /etc/hosts
+127.0.0.1   localhost
+::1         localhost
+127.0.1.1   $HOSTNAME.localdomain $HOSTNAME
+EOL
+
+# Set the root password
+echo root:$PASSWORD | chpasswd
+
+# Install and configure bootloader
+pacman -S --noconfirm grub efibootmgr
+grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB
+grub-mkconfig -o /boot/grub/grub.cfg
+
+# Create a new user
+useradd -m $USERNAME
+echo $USERNAME:$PASSWORD | chpasswd
+usermod -aG wheel,audio,video,optical,storage $USERNAME
+
+# Allow the user to use sudo
+sed -i 's/# %wheel ALL=(ALL) ALL/%wheel ALL=(ALL) ALL/' /etc/sudoers
+
+EOF
+
+# Unmount all partitions and reboot
+umount -R /mnt
+reboot
