@@ -1,0 +1,67 @@
+#!/bin/bash
+
+# Update the system
+sudo pacman -Syu --noconfirm
+
+# Install necessary packages
+sudo pacman -S --noconfirm xorg xorg-xinit git picom feh rofi networkmanager firefox
+
+# Enable NetworkManager
+sudo systemctl enable NetworkManager.service
+sudo systemctl start NetworkManager.service
+
+# Clone and install dwm
+git clone https://git.suckless.org/dwm
+cd dwm
+sudo make clean install
+cd ..
+
+# Clone and install st (simple terminal)
+git clone https://git.suckless.org/st
+cd st
+sudo make clean install
+cd ..
+
+# Clone and install dmenu
+git clone https://git.suckless.org/dmenu
+cd dmenu
+sudo make clean install
+cd ..
+
+# Configure picom (a compositor for transparency and effects)
+mkdir -p ~/.config/picom
+cat <<EOL > ~/.config/picom/picom.conf
+# Example picom configuration file
+
+# Fading
+fading = true;
+fade-delta = 4;
+fade-in-step = 0.03;
+fade-out-step = 0.03;
+
+# Transparency
+opacity-rule = [
+    "90:class_g = 'st'"
+];
+
+# Shadows
+shadow = true;
+shadow-radius = 7;
+shadow-opacity = 0.5;
+shadow-offset-x = -7;
+shadow-offset-y = -7;
+EOL
+
+# Configure dwm to start picom and set a background image
+cat <<'EOL' > ~/.xinitrc
+# Start the compositor
+picom &
+
+# Set a background image
+feh --bg-scale /path/to/your/background/image.jpg
+
+# Start dwm
+exec dwm
+EOL
+
+echo "Installation complete! To start dwm, type 'startx'."
